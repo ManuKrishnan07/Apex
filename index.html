@@ -10,9 +10,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <!-- Cordova — must be last script in head -->
   <script src="cordova.js"></script>
-  <meta http-equiv="Content-Security-Policy"
-  content="default-src * 'unsafe-inline' 'unsafe-eval'; 
-           connect-src *;" />
   <!-- Content Security Policy — allows API calls -->
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self' data: gap:;
@@ -234,7 +231,22 @@
     <div class="setup-card">
       <div class="setup-logo">APEX</div>
       <div class="setup-tagline">Your personal fitness command center</div>
-      <div class="step-indicator">
+      <div id="restore-gate" style="display:none">
+        <div class="card" style="background:var(--surface2);margin-bottom:18px">
+          <div class="section-title" style="margin-bottom:10px">Restore your account</div>
+          <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+            Returning users should sign in first so APEX can pull your saved Firebase data before setup starts.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <button class="btn btn-primary btn-full" onclick="showAuthModal()">Sign In To Restore Data</button>
+            <button class="btn btn-secondary btn-full" onclick="continueOffline()">Continue Offline</button>
+          </div>
+          <div style="margin-top:12px;font-size:12px;color:var(--text3)">
+            If this device has no local profile yet, continuing offline will start a new setup.
+          </div>
+        </div>
+      </div>
+      <div class="step-indicator" id="setup-indicator">
         <div class="step-dot done" id="dot-0"></div>
         <div class="step-dot" id="dot-1"></div>
         <div class="step-dot" id="dot-2"></div>
@@ -596,7 +608,30 @@
               </div>
               <div style="flex:1">
                 <div class="form-label" style="margin-bottom:6px">Quantity</div>
-                <input class="form-input" id="meal-lookup-qty" placeholder="e.g. 4 slices, 1 cup" oninput="clearLookupResult()" />
+                <div style="display:flex;gap:8px">
+                  <input class="form-input" id="meal-lookup-qty"
+                  placeholder="e.g. 200 or 2.5"
+                  oninput="clearLookupResult(); previewQtyParse()" />
+                  <select class="form-select" id="meal-lookup-unit" style="max-width:120px"
+                    onchange="clearLookupResult(); previewQtyParse()">
+                    <option value="">Auto</option>
+                    <option value="g">Gram</option>
+                    <option value="kg">Kg</option>
+                    <option value="ml">Ml</option>
+                    <option value="slice">Slice</option>
+                    <option value="piece">Piece</option>
+                    <option value="cup">Cup</option>
+                    <option value="bowl">Bowl</option>
+                    <option value="plate">Plate</option>
+                    <option value="glass">Glass</option>
+                    <option value="scoop">Scoop</option>
+                    <option value="tsp">Tsp</option>
+                    <option value="tbsp">Tbsp</option>
+                    <option value="handful">Handful</option>
+                  </select>
+                </div>
+                <div id="qty-parse-hint"
+                  style="font-size:11px;color:var(--green);margin-top:4px;display:none;font-family:'DM Mono',monospace"></div>
               </div>
             </div>
             <button class="btn btn-primary btn-full" id="lookup-btn" onclick="lookupNutrition()">🔍 Find Nutrition</button>
@@ -861,6 +896,7 @@ let db = null;
 let fbAuth = null;
 let currentUser = null;
 let isSyncing = false;
+let authResolved = false;
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -956,7 +992,7 @@ async function syncToCloud() {
 }
 
 async function loadFromCloud(uid) {
-  if (!db) return;
+  if (!db) return false;
   try {
     const doc = await db.collection('users').doc(uid).get();
     if (doc.exists) {
@@ -971,13 +1007,16 @@ async function loadFromCloud(uid) {
       };
       localStorage.setItem('apex_v2', JSON.stringify(state));
       showToast('Data synced from cloud ☁️', 'success');
+      return true;
     } else {
       // First time on this account — push local data up
       await syncToCloud();
+      return false;
     }
   } catch(e) {
     console.warn('Cloud load error:', e);
     showToast('Could not reach cloud — using local data', 'error');
+    return false;
   }
 }
 
@@ -985,6 +1024,10 @@ function setSyncIndicator(status) {
   const el = document.getElementById('sync-indicator');
   if (!el) return;
   el.style.background = status==='ok' ? 'var(--green)' : status==='syncing' ? 'var(--accent)' : 'var(--red)';
+}
+
+function isFirebaseConfigured() {
+  return FIREBASE_CONFIG.apiKey !== 'YOUR_FIREBASE_API_KEY';
 }
 
 // ══════════════════════════════════════════════
@@ -999,13 +1042,21 @@ function initFirebase() {
 
     fbAuth.onAuthStateChanged(async (user) => {
       currentUser = user;
+      authResolved = true;
       updateAuthUI();
       if (user) {
-        await loadFromCloud(user.uid);
-        // Re-render current view with fresh data
-        const active = document.querySelector('.page.active')?.id;
-        if (active) showPage(active.replace('page-',''));
-        else renderDashboard();
+        const restored = await loadFromCloud(user.uid);
+        if (state.user) {
+          showApp();
+          const active = document.querySelector('.page.active')?.id;
+          if (active) showPage(active.replace('page-',''));
+          else renderDashboard();
+        } else {
+          startSetupFlow();
+          if (!restored) showToast('No previous cloud profile found. Continue setup to start fresh.', 'error');
+        }
+      } else if (!state.user) {
+        routeInitialView();
       }
     });
   } catch(e) { console.warn('Firebase init error:', e); }
@@ -1044,6 +1095,52 @@ function updateAuthUI() {
       <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Sign in to sync your data across all devices automatically.</div>
       <button class="btn btn-primary btn-full" onclick="closeModal('api-key-modal');showAuthModal()">Sign In / Create Account</button>`;
   }
+}
+
+function showRestoreGate() {
+  const setup = document.getElementById('setup-screen');
+  const app = document.getElementById('main-app');
+  const gate = document.getElementById('restore-gate');
+  const indicator = document.getElementById('setup-indicator');
+  if (setup) setup.style.display = 'flex';
+  if (app) app.style.display = 'none';
+  if (gate) gate.style.display = 'block';
+  if (indicator) indicator.style.display = 'none';
+  document.querySelectorAll('.setup-step').forEach(step => step.classList.remove('active'));
+}
+
+function startSetupFlow() {
+  const setup = document.getElementById('setup-screen');
+  const app = document.getElementById('main-app');
+  const gate = document.getElementById('restore-gate');
+  const indicator = document.getElementById('setup-indicator');
+  if (setup) setup.style.display = 'flex';
+  if (app) app.style.display = 'none';
+  if (gate) gate.style.display = 'none';
+  if (indicator) indicator.style.display = 'flex';
+  document.querySelectorAll('.setup-step').forEach(step => step.classList.remove('active'));
+  document.querySelectorAll('.step-dot').forEach((dot, index) => {
+    if (index === 0) dot.classList.add('done');
+    else dot.classList.remove('done');
+  });
+  setupStep = 0;
+  document.getElementById('step-0')?.classList.add('active');
+}
+
+function continueOffline() {
+  startSetupFlow();
+}
+
+function routeInitialView() {
+  if (state.user) {
+    showApp();
+    return;
+  }
+  if (isFirebaseConfigured() && !currentUser) {
+    showRestoreGate();
+    return;
+  }
+  startSetupFlow();
 }
 
 function showAuthModal() {
@@ -1156,6 +1253,101 @@ const PROVIDERS = {
       </div>`
   }
 };
+
+// ══════════════════════════════════════════════
+//  FOOD UNIT DATABASE + QUANTITY PARSER
+// ══════════════════════════════════════════════
+const FOOD_UNITS = {
+  slice:   { g: 30,  foods: { bread: 30, toast: 28, roti: 40, chapati: 40, naan: 90, paratha: 85, pizza: 100 }},
+  piece:   { g: 50,  foods: { egg: 50, idli: 40, vada: 50, samosa: 70, laddoo: 40, cookie: 15 }},
+  cup:     { g: 200, foods: { rice: 195, 'cooked rice': 195, oats: 81, dal: 200, milk: 244, curd: 245, yogurt: 245, poha: 60, upma: 200, pasta: 140, cornflakes: 30 }},
+  bowl:    { g: 250, foods: { dal: 250, curry: 220, soup: 240, sabzi: 180, salad: 150 }},
+  glass:   { g: 240, foods: { milk: 244, juice: 240, lassi: 240, buttermilk: 240 }},
+  plate:   { g: 350, foods: { rice: 300, biryani: 350, 'dal rice': 450, khichdi: 300 }},
+  tbsp:    { g: 15,  foods: { oil: 14, ghee: 14, butter: 14, 'peanut butter': 16, honey: 21, sugar: 12 }},
+  tsp:     { g: 5,   foods: { oil: 5, ghee: 4, butter: 4, sugar: 4 }},
+  scoop:   { g: 30,  foods: { 'protein powder': 30, whey: 30, 'ice cream': 60 }},
+  handful: { g: 30,  foods: { nuts: 30, almonds: 28, cashews: 30, peanuts: 28 }},
+};
+
+const UNIT_ALIASES = {
+  slices: 'slice', pieces: 'piece', cups: 'cup', bowls: 'bowl',
+  glasses: 'glass', plates: 'plate', scoops: 'scoop', tbsps: 'tbsp',
+  tablespoon: 'tbsp', tablespoons: 'tbsp', teaspoon: 'tsp', teaspoons: 'tsp',
+  serving: 'piece', servings: 'piece',
+};
+
+function parseQtyToGrams(qtyStr, foodName, selectedUnit = '') {
+  if (!qtyStr && !selectedUnit) return { grams: 100, label: '100g' };
+
+  const raw = (qtyStr || '').toLowerCase().trim();
+  const str = selectedUnit && raw && !/[a-z]/i.test(raw) ? `${raw} ${selectedUnit}` : raw;
+  const food = (foodName || '').toLowerCase();
+
+  const weightMatch = str.match(/^(\d+(?:\.\d+)?)\s*(g|grams?|kg|ml|l(?:iter|itre)?)s?$/i);
+  if (weightMatch) {
+    const num  = parseFloat(weightMatch[1]);
+    const unit = weightMatch[2].toLowerCase();
+    if (unit.startsWith('kg')) return { grams: Math.round(num * 1000), label: `${num}kg (${Math.round(num * 1000)}g)` };
+    if (unit === 'ml' || unit.startsWith('l')) return { grams: Math.round(num), label: `${num}${unit}` };
+    return { grams: Math.round(num), label: `${num}g` };
+  }
+
+  const unitMatch = str.match(/^(\d+(?:\.\d+)?)\s*([a-z]+)s?$/);
+  if (unitMatch) {
+    const num      = parseFloat(unitMatch[1]);
+    const rawUnit  = unitMatch[2];
+    const unitKey  = UNIT_ALIASES[rawUnit] || UNIT_ALIASES[`${rawUnit}s`] || rawUnit;
+    const unitData = FOOD_UNITS[unitKey];
+
+    if (unitData) {
+      let gPerUnit = unitData.g;
+      for (const [key, w] of Object.entries(unitData.foods || {})) {
+        if (food.includes(key)) {
+          gPerUnit = w;
+          break;
+        }
+      }
+      const grams = Math.round(num * gPerUnit);
+      return { grams, label: `${num} ${unitKey}${num !== 1 ? 's' : ''} (~${grams}g)` };
+    }
+  }
+
+  const numOnly = parseFloat(str);
+  if (!Number.isNaN(numOnly)) return { grams: Math.round(numOnly), label: `${Math.round(numOnly)}g` };
+
+  return { grams: 100, label: '100g' };
+}
+
+function previewQtyParse() {
+  const food = getText('meal-lookup-name');
+  const qty  = getText('meal-lookup-qty');
+  const unit = document.getElementById('meal-lookup-unit')?.value || '';
+  const hint = document.getElementById('qty-parse-hint');
+  if (!hint) return;
+  if (!qty && !unit) {
+    hint.style.display = 'none';
+    return;
+  }
+  const parsed = parseQtyToGrams(qty, food, unit);
+  hint.textContent = `→ ${parsed.label}`;
+  hint.style.display = 'block';
+}
+
+function scaleNutrition(base, qty, foodName) {
+  const grams = Math.max(1, qty?.grams || 100);
+  const factor = grams / 100;
+  const round1 = n => Math.round((n + Number.EPSILON) * 10) / 10;
+  return {
+    name: `${foodName} (${qty?.label || `${grams}g`})`,
+    calories: Math.round((+base.calories || 0) * factor),
+    protein: round1((+base.protein || 0) * factor),
+    carbs: round1((+base.carbs || 0) * factor),
+    fats: round1((+base.fats || 0) * factor),
+    serving_g: grams,
+    note: `${base.note || 'USDA/standard values'} · scaled from 100g baseline`,
+  };
+}
 
 function getProvider()  { return localStorage.getItem('apex_ai_provider') || 'gemini'; }
 function getApiKey()    { return localStorage.getItem(`apex_key_${getProvider()}`) || ''; }
@@ -1366,14 +1558,9 @@ async function callOpenAI(prompt, maxTokens = 1000) {
 //  INIT
 // ══════════════════════════════════════════════
 function init() {
-  initFirebase();
   loadLocal();
-  if (state.user) {
-    showApp();
-  } else {
-    document.getElementById('setup-screen').style.display = 'flex';
-    document.getElementById('main-app').style.display = 'none';
-  }
+  initFirebase();
+  routeInitialView();
   setDefaultDates();
 }
 
@@ -1672,7 +1859,11 @@ function renderLogPage() {
   if (ctx) {
     const hours = Array.from({length:24},(_,i)=>i);
     const data  = hours.map(h => allToday
-      .filter(m=>m.createdAt && new Date(m.createdAt).getHours()===h)
+      .filter(m => {
+        if (m.mealHour !== undefined) return m.mealHour === h;
+        const approx = { breakfast: 8, lunch: 13, dinner: 20, snack: 16 };
+        return (approx[m.type] || 12) === h;
+      })
       .reduce((s,m)=>s+(+m.cals||0),0));
     charts['calTL'] = new Chart(ctx, {
       type:'bar',
@@ -1738,7 +1929,7 @@ function renderGoals() {
   const el = document.getElementById('goals-list');
   if (el) el.innerHTML = state.goals.length ? state.goals.map(g=>{
     const p   = getGoalProg(g);
-    const pct = Math.min(Math.round(p.cur/p.tgt*100),100);
+    const pct = p.tgt > 0 ? Math.min(Math.round(p.cur / p.tgt * 100), 100) : 0;
     const col = pct>=100?'var(--green)':pct>=60?'var(--accent)':'var(--accent3)';
     return `<div class="goal-item">
       <div class="goal-header">
@@ -2138,23 +2329,32 @@ function renderAnalytics() {
 // ══════════════════════════════════════════════
 async function lookupNutrition() {
   const foodName = getText('meal-lookup-name');
-  const qty      = getText('meal-lookup-qty');
+  const qtyStr   = getText('meal-lookup-qty');
+  const qtyUnit  = document.getElementById('meal-lookup-unit')?.value || '';
   if (!foodName) return showToast('Enter a food name first', 'error');
+
+  const qty = parseQtyToGrams(qtyStr, foodName, qtyUnit);
 
   const btn    = document.getElementById('lookup-btn');
   const status = document.getElementById('lookup-status');
   if (btn)    { btn.disabled=true; btn.textContent='⏳ Looking up...'; }
-  if (status) { status.style.display='block'; status.innerHTML='<span style="color:var(--text2)">Fetching nutrition data...</span>'; }
+  if (status) {
+    status.style.display = 'block';
+    status.innerHTML = `<span style="color:var(--text2)">Looking up 100g baseline for ${esc(foodName)}, then scaling to ${qty.label}...</span>`;
+  }
 
   const prompt = `You are a nutritionist database. Return ONLY a JSON object, no text, no markdown.
 
 Food: "${foodName}"
-Quantity: "${qty || '100g'}"
+User quantity: ${qty.grams}g (user typed: "${qtyStr || '100g'}" = ${qty.label})
 
-JSON structure (all numbers, no strings for numeric fields):
-{"name":"display name with quantity","calories":0,"protein":0,"carbs":0,"fats":0,"serving_g":0,"note":"source note"}
+Return nutrition for EXACTLY 100g only, not the user quantity.
+Use the edible, ready-to-eat form by default.
+If the food is rice and the user did not say raw, dry, or uncooked, assume cooked rice.
 
-Use USDA/standard values. Scale to given quantity. Return ONLY the JSON.`;
+{"name":"${foodName}","calories":0,"protein":0,"carbs":0,"fats":0,"serving_g":100,"note":"source or brief note"}
+
+All values must be numbers. Return ONLY the JSON.`;
 
   try {
     const text      = await callOpenAI(prompt, 400);
@@ -2168,22 +2368,23 @@ Use USDA/standard values. Scale to given quantity. Return ONLY the JSON.`;
     }
     if (nutrition.calories <= 0) throw new Error('Invalid calorie value received');
 
-    ui.lookupData = nutrition;
+    const scaled = scaleNutrition(nutrition, qty, foodName);
+    ui.lookupData = scaled;
 
     // Fill the hidden fields
     const mealName = document.getElementById('meal-name');
-    if (mealName) mealName.value = nutrition.name;
+    if (mealName) mealName.value = scaled.name;
 
     document.getElementById('lookup-preview').innerHTML = [
-      {label:'Calories', val:Math.round(nutrition.calories), unit:'kcal', color:'var(--accent)'},
-      {label:'Protein',  val:Math.round(nutrition.protein),  unit:'g',    color:'var(--accent2)'},
-      {label:'Carbs',    val:Math.round(nutrition.carbs),    unit:'g',    color:'var(--accent3)'},
-      {label:'Fats',     val:Math.round(nutrition.fats),     unit:'g',    color:'var(--accent4)'},
+      {label:'Calories', val:Math.round(scaled.calories), unit:'kcal', color:'var(--accent)'},
+      {label:'Protein',  val:scaled.protein,              unit:'g',    color:'var(--accent2)'},
+      {label:'Carbs',    val:scaled.carbs,                unit:'g',    color:'var(--accent3)'},
+      {label:'Fats',     val:scaled.fats,                 unit:'g',    color:'var(--accent4)'},
     ].map(i=>`<div style="background:var(--surface3);border-radius:8px;padding:10px">
       <div style="font-family:'Bebas Neue';font-size:22px;color:${i.color}">${i.val}</div>
       <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1px">${i.label}<br/>${i.unit}</div>
     </div>`).join('');
-    document.getElementById('lookup-source').textContent = nutrition.note || '';
+    document.getElementById('lookup-source').textContent = scaled.note || '';
     document.getElementById('lookup-result').style.display = 'block';
     if (status) status.style.display = 'none';
 
@@ -2257,6 +2458,7 @@ function addMeal() {
     id:        uid(),
     name,
     type:      document.getElementById('meal-type').value,
+    mealHour:  new Date().getHours(),
     cals:      Math.round(cals),
     protein:   Math.round(protein),
     carbs:     Math.round(carbs),
@@ -2277,9 +2479,13 @@ function addMeal() {
 function resetMealModal() {
   clearFields(['meal-name','meal-name-display','meal-cals','meal-protein','meal-carbs',
                'meal-fats','meal-serving','meal-lookup-name','meal-lookup-qty']);
+  const unit = document.getElementById('meal-lookup-unit');
+  if (unit) unit.value = '';
   document.getElementById('lookup-result').style.display     = 'none';
   document.getElementById('lookup-status').style.display     = 'none';
   document.getElementById('meal-macro-fields').style.display = 'none';
+  const hint = document.getElementById('qty-parse-hint');
+  if (hint) hint.style.display = 'none';
   ui.lookupData = null;
 }
 
@@ -2421,8 +2627,28 @@ function confirmReset() {
 // ══════════════════════════════════════════════
 //  BOOT
 // ══════════════════════════════════════════════
-// Capacitor fires this when native layer is ready
-document.addEventListener('DOMContentLoaded', init, false);
+let _appInitialized = false;
+function safeInit() {
+  if (_appInitialized) return;
+  _appInitialized = true;
+  init();
+}
+
+document.addEventListener('DOMContentLoaded', safeInit, false);
+document.addEventListener('deviceready', safeInit, false);
+
+document.addEventListener('pause', save, false);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') save();
+}, false);
+
+document.addEventListener('deviceready', () => {
+  if (window.Capacitor?.Plugins?.App) {
+    window.Capacitor.Plugins.App.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) save();
+    });
+  }
+}, false);
 </script>
 </body>
 </html>
