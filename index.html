@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a0f" />
   <title>APEX — Fitness Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -39,10 +40,12 @@
       --border: rgba(255,255,255,0.07); --accent: #e8ff47; --accent2: #47b4ff;
       --accent3: #ff6b47; --accent4: #b847ff; --text: #f0f0f8; --text2: #8888a8;
       --text3: #55556a; --green: #47ffb4; --red: #ff4747; --radius: 16px; --radius-sm: 8px;
+      --safe-top: env(safe-area-inset-top, 0px); --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
-    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100dvh; overflow-x: hidden; }
     body::before {
       content: ''; position: fixed; inset: 0;
       background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
@@ -50,10 +53,10 @@
     }
     #app { position: relative; z-index: 1; }
 
-    nav { position: fixed; top: 0; left: 0; right: 0; height: 64px; background: rgba(10,10,15,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; z-index: 100; gap: 8px; }
+    nav { position: fixed; top: 0; left: 0; right: 0; min-height: 64px; background: rgba(10,10,15,0.92); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: calc(8px + var(--safe-top)) calc(24px + var(--safe-right)) 8px calc(24px + var(--safe-left)); z-index: 100; gap: 8px; }
     .nav-logo { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 3px; color: var(--accent); flex-shrink: 0; }
     .nav-logo span { color: var(--text2); font-size: 12px; font-family: 'DM Mono', monospace; vertical-align: middle; margin-left: 8px; }
-    .nav-tabs { display: flex; gap: 4px; flex-wrap: nowrap; }
+    .nav-tabs { display: flex; gap: 4px; flex-wrap: nowrap; min-width: 0; }
     .nav-tab { padding: 8px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all .2s; border: none; background: none; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
     .nav-tab:hover { color: var(--text); background: var(--surface2); }
     .nav-tab.active { color: var(--accent); background: rgba(232,255,71,0.08); }
@@ -64,7 +67,7 @@
     .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    .main { padding: 80px 24px 40px; max-width: 1400px; margin: 0 auto; }
+    .main { padding: calc(92px + var(--safe-top)) calc(24px + var(--safe-right)) calc(40px + var(--safe-bottom)) calc(24px + var(--safe-left)); max-width: 1400px; margin: 0 auto; }
     .page { display: none; animation: fadeIn .2s ease; }
     .page.active { display: block; }
     @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
@@ -171,12 +174,55 @@
     .api-steps li { margin-bottom: 2px; }
     .api-steps a { color: var(--accent2); text-decoration: none; }
     .api-steps a:hover { text-decoration: underline; }
+    .toolbar-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .macro-layout { display: flex; gap: 16px; align-items: center; }
+    .planner-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .planner-inline { display: flex; gap: 8px; }
+    .provider-selector { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 
     @media(max-width:800px){
       .nav-tabs .nav-tab span { display: none; }
       .nav-date { display: none; }
       .nav-tab { padding: 8px 10px; }
       .auth-chip .auth-email { display: none; }
+    }
+    @media(max-width:720px){
+      nav { align-items: stretch; justify-content: flex-start; flex-wrap: wrap; gap: 10px; }
+      .nav-logo { width: 100%; display: flex; align-items: center; justify-content: space-between; }
+      .nav-tabs { order: 3; width: 100%; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+      .nav-tabs::-webkit-scrollbar { display: none; }
+      .nav-tab { flex: 0 0 auto; }
+      .nav-right { width: 100%; justify-content: space-between; }
+      .main { padding-top: calc(154px + var(--safe-top)); }
+      .card { padding: 18px; }
+      .card-value { font-size: 42px; }
+      .chart-wrap, .chart-wrap-tall { height: 240px; }
+      .toolbar-actions, .planner-inline, .modal-actions { flex-direction: column; align-items: stretch; }
+      .toolbar-actions > *, .planner-inline > *, .modal-actions > * { width: 100%; }
+      .macro-layout { flex-direction: column; align-items: stretch; }
+      .macro-layout > :first-child { margin: 0 auto; }
+      .provider-selector { grid-template-columns: 1fr; }
+      #lookup-preview { grid-template-columns: repeat(2, 1fr) !important; }
+      #planner-chat { max-height: 300px !important; }
+      #planner-input-area { flex-direction: column; }
+      #planner-send-btn, #quick-generate-btn { width: 100%; }
+      .toast-wrap { left: 16px; right: 16px; bottom: calc(16px + var(--safe-bottom)); }
+      .toast { min-width: 0; width: 100%; }
+    }
+    @media(max-width:480px){
+      nav { padding-left: calc(14px + var(--safe-left)); padding-right: calc(14px + var(--safe-right)); }
+      .main { padding-left: calc(14px + var(--safe-left)); padding-right: calc(14px + var(--safe-right)); padding-top: calc(148px + var(--safe-top)); }
+      .setup-wrap { padding: 14px; }
+      .setup-card { border-radius: 20px; padding: 28px 18px; }
+      .setup-logo { font-size: 42px; }
+      .section-title { font-size: 18px; }
+      .card-value { font-size: 36px; }
+      .btn { min-height: 44px; }
+      .nav-tab { padding: 10px 12px; }
+      .log-item, .meal-slot, .goal-header { align-items: flex-start; }
+      .modal { padding: 22px 16px; max-height: calc(100dvh - 32px - var(--safe-top) - var(--safe-bottom)); }
+      .provider-selector { gap: 10px; }
+      #lookup-preview { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
     }
   </style>
 </head>
@@ -297,7 +343,7 @@
             <div class="section-title" id="dash-greeting">Good Morning!</div>
             <div class="section-sub">Here's your summary for today</div>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="toolbar-actions">
             <input type="date" class="form-input" id="dash-date-picker" style="width:auto;font-family:'DM Mono',monospace;font-size:12px" onchange="renderDashboard()" />
             <button class="btn btn-primary btn-sm" onclick="openAddMealModal()">+ Log Meal</button>
             <button class="btn btn-secondary btn-sm" onclick="openLogWeightModal()">⚖ Weight</button>
@@ -340,7 +386,7 @@
             <div id="remaining-macros"></div>
             <div class="divider"></div>
             <div class="card-title">Body Weight</div>
-            <div style="display:flex;align-items:flex-end;gap:12px">
+            <div class="toolbar-actions" style="align-items:flex-end">
               <div>
                 <div class="card-value" style="color:var(--green)" id="dash-weight">--</div>
                 <div class="card-sub">kg logged</div>
@@ -356,7 +402,7 @@
           </div>
           <div class="card">
             <div class="card-title">Today's Macro Distribution</div>
-            <div style="display:flex;gap:16px;align-items:center">
+            <div class="macro-layout">
               <div style="width:160px;height:160px;flex-shrink:0"><canvas id="chart-macro-pie"></canvas></div>
               <div id="macro-legend" style="flex:1"></div>
             </div>
@@ -368,7 +414,7 @@
       <div class="page" id="page-log">
         <div class="section-header">
           <div><div class="section-title">Food Log</div><div class="section-sub">Track every meal and snack</div></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="toolbar-actions" style="gap:8px">
             <input type="date" class="form-input" id="log-date-picker" style="width:auto;font-family:'DM Mono',monospace;font-size:12px" onchange="renderLogPage()" />
             <button class="btn btn-primary" onclick="openAddMealModal()">+ Add Food</button>
           </div>
@@ -463,7 +509,7 @@
           <button class="btn btn-secondary btn-sm" onclick="resetPlanner()" id="reset-planner-btn" style="display:none">↺ Start Over</button>
         </div>
         <div id="planner-setup" class="card" style="max-width:720px;margin:0 auto">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+          <div class="planner-header">
             <div style="width:40px;height:40px;border-radius:50%;background:rgba(232,255,71,0.12);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🤖</div>
             <div>
               <div style="font-weight:600;font-size:15px">APEX Meal Planner</div>
@@ -482,12 +528,12 @@
         <div id="planner-quick-entry" style="display:none;max-width:720px;margin:0 auto" class="card">
           <div class="card-title">Your Regular Foods</div>
           <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Add all the foods you commonly eat. APEX will calculate nutrition and build your plan.</div>
-          <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div class="planner-inline" style="margin-bottom:12px">
             <input class="form-input" id="quick-food-input" placeholder="e.g. rice, egg, banana, dal..." onkeydown="if(event.key==='Enter')addQuickFood()" style="flex:1" />
             <button class="btn btn-primary" onclick="addQuickFood()">+ Add</button>
           </div>
           <div id="quick-food-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;min-height:36px"></div>
-          <div style="display:flex;gap:10px">
+          <div class="planner-inline" style="gap:10px">
             <button class="btn btn-secondary" onclick="showPlannerChat()">← Back to chat</button>
             <button class="btn btn-primary" style="flex:1" id="quick-generate-btn" onclick="generateFromQuickFoods()">⚡ Generate My Plan</button>
           </div>
@@ -543,7 +589,7 @@
           <div style="background:rgba(232,255,71,0.06);border:1px solid rgba(232,255,71,0.15);border-radius:10px;padding:14px;margin-bottom:16px">
             <div style="font-size:12px;font-weight:600;color:var(--accent);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">⚡ Smart Lookup</div>
             <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Type what you ate and how much — AI will find the nutrition info automatically.</div>
-            <div style="display:flex;gap:8px;margin-bottom:10px">
+            <div class="planner-inline" style="margin-bottom:10px">
               <div style="flex:2">
                 <div class="form-label" style="margin-bottom:6px">Food / Dish</div>
                 <input class="form-input" id="meal-lookup-name" placeholder="e.g. bread, dal rice, banana" oninput="clearLookupResult()" />
@@ -672,7 +718,7 @@
         <!-- Provider selector -->
         <div style="margin-bottom:20px">
             <div class="form-label" style="margin-bottom:10px">AI Provider</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px" id="provider-selector">
+            <div class="provider-selector" id="provider-selector">
     
             <div class="provider-card active" id="card-gemini" onclick="selectProvider('gemini')"
                 style="border:1px solid rgba(232,255,71,0.3);border-radius:10px;padding:12px;cursor:pointer;text-align:center;background:rgba(232,255,71,0.06);transition:all .2s">
@@ -2380,4 +2426,3 @@ document.addEventListener('DOMContentLoaded', init, false);
 </script>
 </body>
 </html>
-
